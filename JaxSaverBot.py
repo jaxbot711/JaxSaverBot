@@ -5,17 +5,22 @@ import os
 from yt_dlp import YoutubeDL
 import threading
 import time
-import requests  # <-- جديد
+import requests
 
 API_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL = '@JexMemes'
 CHANNEL_LINK = 'https://t.me/JexMemes'
-WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook'  # ✅ تم التعديل هنا
+WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook'
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# التأكد من مجلد التنزيل
+# ⛓️ إنشاء ملف cookies.txt من متغير البيئة (مرة واحدة عند التشغيل)
+if os.environ.get("COOKIES_DATA"):
+    with open("cookies.txt", "w", encoding="utf-8") as f:
+        f.write(os.environ["COOKIES_DATA"])
+
+# إنشاء مجلد التحميل إن لم يكن موجوداً
 if not os.path.exists('downloads'):
     os.makedirs('downloads')
 
@@ -28,14 +33,14 @@ def is_subscribed(user_id):
         print(f"[خطأ في التحقق من الاشتراك] {e}")
         return False
 
-# تحميل الفيديو (مُحدّث لإضافة ملف الكوكيز)
+# تحميل الفيديو باستخدام yt-dlp
 def download_video(url):
     try:
         ydl_opts = {
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'format': 'mp4',
             'quiet': True,
-            'cookies': 'cookies.txt',  # ← استخدم ملف الكوكيز
+            'cookies': 'cookies.txt',
         }
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -44,7 +49,7 @@ def download_video(url):
         print(f"[خطأ في التحميل] {e}")
         return None
 
-# التعبيرات العادية
+# التعبيرات العادية للتعرف على الروابط
 tiktok_regex = re.compile(r'https?://(www\.)?(vt\.)?tiktok\.com/.+')
 instagram_regex = re.compile(r'https?://(www\.)?instagram\.com/.+')
 twitter_regex = re.compile(r'https?://(www\.)?(twitter\.com|x\.com)/.+')
@@ -108,7 +113,7 @@ def set_webhook():
     bot.set_webhook(url=WEBHOOK_URL)
     return 'Webhook has been set!'
 
-# 🔄 وظيفة منع النوم
+# 🔄 Ping لمنع نوم البوت
 def keep_alive():
     while True:
         try:
@@ -119,6 +124,5 @@ def keep_alive():
 
 threading.Thread(target=keep_alive).start()
 
-# تشغيل التطبيق
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
