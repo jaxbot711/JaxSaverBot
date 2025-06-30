@@ -15,11 +15,6 @@ WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook'
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# ⛓️ إنشاء ملف cookies.txt من متغير البيئة (إن وُجد)
-if os.environ.get("COOKIES_DATA"):
-    with open("cookies.txt", "w", encoding="utf-8") as f:
-        f.write(os.environ["COOKIES_DATA"])
-
 # إنشاء مجلد التنزيلات إذا لم يكن موجود
 if not os.path.exists('downloads'):
     os.makedirs('downloads')
