@@ -1,1 +1,4 @@
-# ضع هنا الكوكيز المصدّرة من Instagram و Twitter
+sessionid=75335494377%3AAUkyumKOdl7nc8%3A28%3AAYf21UxIh2iMMEgVLwTx8WDwrPWXcQXulmAr5YAgkA;
+ds_user_id=75335494377;
+csrftoken=WxfoEIpYqlcAInTRPAQTmsT5y7lxxLFe;
+
