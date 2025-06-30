@@ -15,27 +15,18 @@ WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook'
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# إنشاء مجلد التحميل إن لم يكن موجوداً
+# إنشاء مجلد التنزيل إذا لم يكن موجوداً
 if not os.path.exists('downloads'):
     os.makedirs('downloads')
 
-# التحقق من الاشتراك في القناة
-def is_subscribed(user_id):
-    try:
-        member = bot.get_chat_member(CHANNEL, user_id)
-        return member.status != 'left'
-    except Exception as e:
-        print(f"[خطأ في التحقق من الاشتراك] {e}")
-        return False
-
-# تحميل الفيديو باستخدام yt-dlp
+# تحميل الفيديو باستخدام yt-dlp مع الكوكيز
 def download_video(url):
     try:
         ydl_opts = {
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'format': 'mp4',
             'quiet': True,
-            'cookies': 'cookies.txt',  # ← استخدام ملف الكوكيز الموجود في المشروع
+            'cookiefile': 'cookies.txt',
         }
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -44,7 +35,16 @@ def download_video(url):
         print(f"[خطأ في التحميل] {e}")
         return None
 
-# التعبيرات العادية للتعرف على الروابط
+# التحقق من الاشتراك في القناة
+def is_subscribed(user_id):
+    try:
+        member = bot.get_chat_member(CHANNEL, user_id)
+        return member.status != 'left'
+    except Exception as e:
+        print(f"[خطأ التحقق من الاشتراك] {e}")
+        return False
+
+# التعبيرات العادية
 tiktok_regex = re.compile(r'https?://(www\.)?(vt\.)?tiktok\.com/.+')
 instagram_regex = re.compile(r'https?://(www\.)?instagram\.com/.+')
 twitter_regex = re.compile(r'https?://(www\.)?(twitter\.com|x\.com)/.+')
@@ -80,44 +80,4 @@ def handle_message(message):
     elif twitter_regex.match(text):
         bot.reply_to(message, "📥 جارٍ تحميل الفيديو من Twitter (X)...")
     else:
-        bot.reply_to(message, "❌ الرابط غير مدعوم. يرجى إرسال رابط من TikTok أو Instagram أو Twitter (X) فقط.")
-        return
-
-    file_path = download_video(text)
-    if file_path:
-        try:
-            with open(file_path, 'rb') as video:
-                bot.send_document(message.chat.id, video)
-            os.remove(file_path)
-        except Exception as e:
-            print(f"[خطأ أثناء الإرسال] {e}")
-            bot.send_message(message.chat.id, "❌ حدث خطأ أثناء إرسال الفيديو.")
-    else:
-        bot.send_message(message.chat.id, "❌ فشل في تحميل الفيديو. تأكد من صحة الرابط.")
-
-# نقاط الاتصال للويب هوك
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
-    bot.process_new_updates([update])
-    return '', 200
-
-@app.route('/set_webhook', methods=['GET'])
-def set_webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=WEBHOOK_URL)
-    return 'Webhook has been set!'
-
-# 🔄 Ping لمنع نوم البوت
-def keep_alive():
-    while True:
-        try:
-            requests.get("https://jaxsaverbot.onrender.com")
-        except Exception as e:
-            print("Ping error:", e)
-        time.sleep(300)
-
-threading.Thread(target=keep_alive).start()
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+        bot.reply_to(message, "❌ الرابط غير مدعوم. أرسل رابط من TikTok أو Instagram أو Twitter فقط_
