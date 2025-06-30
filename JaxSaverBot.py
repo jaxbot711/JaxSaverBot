@@ -15,11 +15,6 @@ WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook'
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
 
-# ⛓️ إنشاء ملف cookies.txt من متغير البيئة (مرة واحدة عند التشغيل)
-if os.environ.get("COOKIES_DATA"):
-    with open("cookies.txt", "w", encoding="utf-8") as f:
-        f.write(os.environ["COOKIES_DATA"])
-
 # إنشاء مجلد التحميل إن لم يكن موجوداً
 if not os.path.exists('downloads'):
     os.makedirs('downloads')
@@ -40,7 +35,7 @@ def download_video(url):
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'format': 'mp4',
             'quiet': True,
-            'cookies': 'cookies.txt',
+            'cookies': 'cookies.txt',  # ← استخدام ملف الكوكيز الموجود في المشروع
         }
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -120,7 +115,7 @@ def keep_alive():
             requests.get("https://jaxsaverbot.onrender.com")
         except Exception as e:
             print("Ping error:", e)
-        time.sleep(300)  # كل 5 دقائق
+        time.sleep(300)
 
 threading.Thread(target=keep_alive).start()
 
