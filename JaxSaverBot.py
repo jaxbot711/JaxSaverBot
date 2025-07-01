@@ -5,12 +5,14 @@ import os
 from yt_dlp import YoutubeDL
 import threading
 import time
+import sqlite3
 import requests
 
+# إعدادات البوت
 API_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL = '@JexMemes'
-CHANNEL_LINK = 'https://t.me/JexMemes'
-WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook'
+CHANNEL_LINK = 'https://t.me/JexMemes '
+WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook '
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
@@ -19,13 +21,58 @@ app = Flask(__name__)
 if not os.path.exists('downloads'):
     os.makedirs('downloads')
 
+# ====== DATABASE SETUP ======
+DB_NAME = 'bot.db'
+
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+                      user_id INTEGER PRIMARY KEY,
+                      username TEXT,
+                      first_seen TEXT,
+                      downloads INTEGER DEFAULT 0)''')
+    conn.commit()
+    conn.close()
+
+def add_user(message):
+    user_id = message.from_user.id
+    username = message.from_user.username or "N/A"
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+    if not cursor.fetchone():
+        cursor.execute("INSERT INTO users (user_id, username, first_seen) VALUES (?, ?, ?)",
+                       (user_id, username, now))
+    conn.commit()
+    conn.close()
+
+def increment_download(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET downloads = downloads + 1 WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+
+def get_stats(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT downloads FROM users WHERE user_id=?", (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else 0
+
+# ====== END DATABASE ======
+
 # التحقق من الاشتراك في القناة
 def is_subscribed(user_id):
     try:
         member = bot.get_chat_member(CHANNEL, user_id)
-        return member.status != 'left'
+        return member.status in ['member', 'administrator', 'creator']
     except Exception as e:
-        print(f"[خطأ في التحقق من الاشتراك] {e}")
+        print(f"[Error checking subscription] {e}")
         return False
 
 # تحميل الفيديو باستخدام yt-dlp
@@ -45,7 +92,7 @@ def download_video(url):
             info = ydl.extract_info(url, download=True)
             return ydl.prepare_filename(info)
     except Exception as e:
-        print(f"[خطأ في التحميل] {e}")
+        print(f"[Download error] {e}")
         return None
 
 # تعبيرات منتظمة للتعرف على الروابط
@@ -53,9 +100,10 @@ tiktok_regex = re.compile(r'https?://(www\.)?(vt\.)?tiktok\.com/.+')
 instagram_regex = re.compile(r'https?://(www\.)?instagram\.com/.+')
 twitter_regex = re.compile(r'https?://(www\.)?(twitter\.com|x\.com)/.+')
 
-
+# ===== HANDLERS =====
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
+    add_user(message)
     bot.reply_to(message, f"""👋 أهلاً بك في بوت التحميل!
 
 📥 أرسل رابط فيديو من:
@@ -67,6 +115,15 @@ def send_welcome(message):
 {CHANNEL_LINK}
 """)
 
+@bot.message_handler(commands=['stats'])
+def send_stats(message):
+    user_id = message.from_user.id
+    if not is_subscribed(user_id):
+        bot.reply_to(message, f"⚠️ يجب الاشتراك أولاً في القناة:\n{CHANNEL_LINK}")
+        return
+
+    count = get_stats(user_id)
+    bot.reply_to(message, f"📊 لقد قمت بتنزيل {count} فيديو حتى الآن.")
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
@@ -93,8 +150,9 @@ def handle_message(message):
             with open(file_path, 'rb') as video:
                 bot.send_document(message.chat.id, video)
             os.remove(file_path)
+            increment_download(user_id)
         except Exception as e:
-            print(f"[خطأ أثناء الإرسال] {e}")
+            print(f"[Send error] {e}")
             bot.send_message(message.chat.id, "❌ حدث خطأ أثناء إرسال الفيديو.")
     else:
         bot.send_message(message.chat.id, "❌ فشل في تحميل الفيديو. تأكد من صحة الرابط أو جرب لاحقاً.")
@@ -116,7 +174,7 @@ def set_webhook():
 def keep_alive():
     while True:
         try:
-            requests.get("https://jaxsaverbot.onrender.com")
+            requests.get("https://jaxsaverbot.onrender.com ")
         except Exception as e:
             print("Ping error:", e)
         time.sleep(300)
@@ -124,4 +182,5 @@ def keep_alive():
 threading.Thread(target=keep_alive).start()
 
 if __name__ == '__main__':
+    init_db()  # تهيئة قاعدة البيانات عند تشغيل السيرفر
     app.run(host='0.0.0.0', port=10000)
