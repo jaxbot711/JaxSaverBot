@@ -7,12 +7,13 @@ import threading
 import time
 import sqlite3
 import requests
+from datetime import datetime
 
 # إعدادات البوت
 API_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL = '@JexMemes'
-CHANNEL_LINK = 'https://t.me/JexMemes '
-WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook '
+CHANNEL_LINK = 'https://t.me/JexMemes'
+WEBHOOK_URL = 'https://jaxsaverbot.onrender.com/webhook'
 
 bot = telebot.TeleBot(API_TOKEN)
 app = Flask(__name__)
@@ -27,11 +28,14 @@ DB_NAME = 'bot.db'
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-                      user_id INTEGER PRIMARY KEY,
-                      username TEXT,
-                      first_seen TEXT,
-                      downloads INTEGER DEFAULT 0)''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            first_seen TEXT,
+            downloads INTEGER DEFAULT 0
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -44,8 +48,11 @@ def add_user(message):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
     if not cursor.fetchone():
-        cursor.execute("INSERT INTO users (user_id, username, first_seen) VALUES (?, ?, ?)",
-                       (user_id, username, now))
+        cursor.execute(
+            "INSERT INTO users (user_id, username, first_seen) VALUES (?, ?, ?)",
+            (user_id, username, now)
+        )
+        print(f"[DB] Added new user: {username} ({user_id})")
     conn.commit()
     conn.close()
 
@@ -70,9 +77,11 @@ def get_stats(user_id):
 def is_subscribed(user_id):
     try:
         member = bot.get_chat_member(CHANNEL, user_id)
-        return member.status in ['member', 'administrator', 'creator']
+        is_member = member.status in ['member', 'administrator', 'creator']
+        print(f"[Subscription Check] User {user_id} subscription status: {member.status}")
+        return is_member
     except Exception as e:
-        print(f"[Error checking subscription] {e}")
+        print(f"[Error checking subscription for {user_id}]: {e}")
         return False
 
 # تحميل الفيديو باستخدام yt-dlp
@@ -82,20 +91,23 @@ def download_video(url):
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'format': 'mp4',
             'quiet': True,
+            'no_warnings': True,
+            # 'cookiefile': 'cookies.txt'  # فعّل هذا فقط إذا لديك ملف الكوكيز
         }
 
-        # إذا كان ملف الكوكيز موجود، أضفه
         if os.path.exists("cookies.txt"):
             ydl_opts['cookiefile'] = "cookies.txt"
 
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            return ydl.prepare_filename(info)
+            filename = ydl.prepare_filename(info)
+            print(f"[Download] Downloaded file: {filename}")
+            return filename
     except Exception as e:
         print(f"[Download error] {e}")
         return None
 
-# تعبيرات منتظمة للتعرف على الروابط
+# تعبيرات منتظمة للتعرف على الروابط بدقة أكبر
 tiktok_regex = re.compile(r'https?://(www\.)?(vt\.)?tiktok\.com/.+')
 instagram_regex = re.compile(r'https?://(www\.)?instagram\.com/.+')
 twitter_regex = re.compile(r'https?://(www\.)?(twitter\.com|x\.com)/.+')
@@ -160,7 +172,8 @@ def handle_message(message):
 # إعداد Webhook
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
     bot.process_new_updates([update])
     return '', 200
 
@@ -170,17 +183,20 @@ def set_webhook():
     bot.set_webhook(url=WEBHOOK_URL)
     return 'Webhook has been set!'
 
-# منع Render من النوم
+# منع Render من النوم (keep alive)
 def keep_alive():
     while True:
         try:
-            requests.get("https://jaxsaverbot.onrender.com ")
+            requests.get(WEBHOOK_URL)
+            print("[Keep Alive] Ping sent.")
         except Exception as e:
-            print("Ping error:", e)
-        time.sleep(300)
+            print(f"[Ping error]: {e}")
+        time.sleep(300)  # كل 5 دقائق
 
-threading.Thread(target=keep_alive).start()
+threading.Thread(target=keep_alive, daemon=True).start()
 
 if __name__ == '__main__':
     init_db()  # تهيئة قاعدة البيانات عند تشغيل السيرفر
-    app.run(host='0.0.0.0', port=10000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+
